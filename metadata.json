@@ -1,0 +1,6 @@
+{
+  "name": "English Shiksha",
+  "description": "An interactive, gamified English learning platform for Hindi speakers with teacher dashboards, pronunciation feedback, and high accessibility features.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
