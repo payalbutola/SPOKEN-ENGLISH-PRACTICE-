@@ -34,4 +34,13 @@ interface AppDao {
 
     @Query("DELETE FROM custom_homework WHERE id = :id")
     suspend fun deleteCustomHomework(id: Int)
+
+    @Query("SELECT * FROM downloaded_lesson")
+    fun getAllDownloadedLessons(): Flow<List<DownloadedLesson>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertDownloadedLesson(downloaded: DownloadedLesson)
+
+    @Query("DELETE FROM downloaded_lesson WHERE id = :id")
+    suspend fun deleteDownloadedLesson(id: String)
 }

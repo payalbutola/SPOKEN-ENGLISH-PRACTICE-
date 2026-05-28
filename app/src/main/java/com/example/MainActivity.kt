@@ -16,6 +16,7 @@ import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.unit.dp
 import com.example.ui.screens.LessonPracticeScreen
 import com.example.ui.screens.StudentHomeScreen
+import com.example.ui.screens.StoryPracticeScreen
 import com.example.ui.screens.TeacherDashboardScreen
 import com.example.ui.theme.EnglishShikshaTheme
 import com.example.viewmodel.AppScreen
@@ -54,6 +55,9 @@ class MainActivity : ComponentActivity() {
                                     onStartLesson = { lesson ->
                                         viewModel.navigateTo(AppScreen.LessonPractice(lesson))
                                     },
+                                    onStartStory = { story ->
+                                        viewModel.navigateTo(AppScreen.StoryPractice(story))
+                                    },
                                     modifier = Modifier.padding(innerPadding)
                                 )
                             }
@@ -61,6 +65,16 @@ class MainActivity : ComponentActivity() {
                                 LessonPracticeScreen(
                                     viewModel = viewModel,
                                     lesson = activeScreen.lesson,
+                                    onBack = {
+                                        viewModel.navigateTo(AppScreen.StudentHome)
+                                    },
+                                    modifier = Modifier.padding(innerPadding)
+                                )
+                            }
+                            is AppScreen.StoryPractice -> {
+                                StoryPracticeScreen(
+                                    viewModel = viewModel,
+                                    story = activeScreen.story,
                                     onBack = {
                                         viewModel.navigateTo(AppScreen.StudentHome)
                                     },

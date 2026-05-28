@@ -37,3 +37,10 @@ data class CustomHomework(
     val hint: String,
     val level: String // "Beginner" or "Advanced"
 )
+
+@Entity(tableName = "downloaded_lesson")
+data class DownloadedLesson(
+    @PrimaryKey val id: String, // lesson id or story id
+    val isStory: Boolean = false,
+    val title: String = ""
+)

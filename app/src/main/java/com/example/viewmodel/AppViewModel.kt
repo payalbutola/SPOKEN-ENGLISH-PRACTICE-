@@ -24,12 +24,24 @@ import java.util.*
 sealed interface AppScreen {
     object StudentHome : AppScreen
     data class LessonPractice(val lesson: Lesson) : AppScreen
+    data class StoryPractice(val story: Story) : AppScreen
     object TeacherDashboard : AppScreen
 }
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val database = AppDatabase.getDatabase(application)
     private val repository = AppRepository(database.dao())
+
+    // Simulated network status: Online / Offline
+    private val _isOnline = MutableStateFlow<Boolean>(true)
+    val isOnline: StateFlow<Boolean> = _isOnline.asStateFlow()
+
+    // Offline downloaded materials
+    val downloadedLessons: StateFlow<List<DownloadedLesson>> = repository.allDownloadedLessons.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     // UI state
     val userProgress: StateFlow<UserProgress?> = repository.userProgress.stateIn(
@@ -212,7 +224,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 completionDate = today,
                 accuracy = accuracy,
                 level = level,
-                isBackupSynced = false
+                isBackupSynced = _isOnline.value
             )
             repository.insertStudentScore(scoreEntry)
 
@@ -226,6 +238,57 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     lastActiveDate = today
                 )
             )
+        }
+    }
+
+    fun completeStoryRewards(story: Story, scoreItem: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val today = getTodayDateString()
+            val totalQuestions = story.segments.size
+            val accuracy = if (totalQuestions > 0) (scoreItem.toFloat() / totalQuestions.toFloat()) * 100f else 0f
+            val currentProgress = repository.getUserProgressOnce() ?: UserProgress()
+
+            val scoreEntry = StudentScore(
+                studentName = currentProgress.name,
+                lessonTitle = "Story: ${story.title}",
+                score = scoreItem,
+                totalQuestions = totalQuestions,
+                completionDate = today,
+                accuracy = accuracy,
+                level = story.level,
+                isBackupSynced = _isOnline.value
+            )
+            repository.insertStudentScore(scoreEntry)
+
+            val updatedXp = currentProgress.xp + story.xpValue
+            repository.saveUserProgress(
+                currentProgress.copy(
+                    xp = updatedXp,
+                    lastActiveDate = today
+                )
+            )
+        }
+    }
+
+    fun toggleOnlineStatus() {
+        viewModelScope.launch {
+            _isOnline.value = !_isOnline.value
+            if (_isOnline.value) {
+                // Dev returned online: Automatically backup/sync content to mock server
+                triggerCloudBackup()
+            }
+        }
+    }
+
+    fun downloadLesson(id: String, isStory: Boolean, title: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.insertDownloadedLesson(id, isStory, title)
+        }
+    }
+
+    fun removeDownloadedLesson(id: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.deleteDownloadedLesson(id)
         }
     }
 

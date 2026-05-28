@@ -33,15 +33,22 @@ fun StudentHomeScreen(
     viewModel: AppViewModel,
     progress: UserProgress,
     onStartLesson: (Lesson) -> Unit,
+    onStartStory: (Story) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val homeworkList by viewModel.customHomework.collectAsState()
     val backupState by viewModel.backupStatus.collectAsState()
     val lastBackupTime by viewModel.lastBackupTime.collectAsState()
+    val isOnline by viewModel.isOnline.collectAsState()
+    val downloadedList by viewModel.downloadedLessons.collectAsState()
 
     var showAccessibilityCard by remember { mutableStateOf(false) }
 
     val filteredLessons = LessonsData.lessonsList.filter {
+        it.level == progress.currentLevel
+    }
+
+    val filteredStories = StoriesData.storiesList.filter {
         it.level == progress.currentLevel
     }
 
@@ -378,52 +385,116 @@ fun StudentHomeScreen(
             }
         }
 
-        // Cloud backup synchronized visual indicator
+        // Connection & Offline Access Synchronization Core Card
         item {
+            val unsyncedCount = viewModel.studentScores.collectAsState().value.count { !it.isBackupSynced }
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = if (isOnline) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                 ),
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(24.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
                         1.dp,
                         MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                        RoundedCornerShape(20.dp)
+                        RoundedCornerShape(24.dp)
                     )
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(
-                                if (backupState == "SUCCESS") Color(0xFF2E7D32) else MaterialTheme.colorScheme.outline,
-                                RoundedCornerShape(5.dp)
+                Column(modifier = Modifier.padding(18.dp)) {
+                    // Title and toggle row
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                "CONNECTION & OFFLINE CORES / सिंक नियंत्रक",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
                             )
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = if (backupState == "SUCCESS") "Database secured & synced (Cloud backup ok!)" else "Database offline (Local Storage, sync needed)",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                        modifier = Modifier.weight(1f)
-                    )
-                    if (backupState != "SUCCESS") {
-                        Text(
-                            text = "Sync now",
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary,
+                            Text(
+                                if (isOnline) "🟢 ONLINE MODE" else "🟡 OFFLINE PRACTICE",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                                color = if (isOnline) Color(0xFF2E7D32) else Color(0xFFE65100)
+                            )
+                        }
+
+                        // Toggle switch for testing offline mode
+                        Box(
                             modifier = Modifier
-                                .clickable { viewModel.triggerCloudBackup() }
-                                .testTag("home_sync_anchor")
-                        )
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(
+                                    if (isOnline) Color(0xFFE8F5E9) else Color(0xFFFFF3E0)
+                                )
+                                .clickable { viewModel.toggleOnlineStatus() }
+                                .border(
+                                    1.dp,
+                                    if (isOnline) Color(0xFFC8E6C9) else Color(0xFFFFE0B2),
+                                    RoundedCornerShape(20.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                                .testTag("online_status_toggle")
+                        ) {
+                            Text(
+                                text = if (isOnline) "GO OFFLINE / ऑफ़लाइन" else "GO ONLINE / ऑनलाइन जाएं",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = if (isOnline) Color(0xFF1B5E20) else Color(0xFFE65100)
+                            )
+                        }
                     }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Sync & Backup logs details
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(
+                                    if (isOnline && unsyncedCount == 0) Color(0xFF2E7D32) else Color(0xFFC62828),
+                                    RoundedCornerShape(4.dp)
+                                )
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isOnline) {
+                                if (unsyncedCount > 0) "$unsyncedCount completions waiting to sync!" else "All scores synced & backed up (Last: $lastBackupTime)"
+                            } else {
+                                "Running offline! $unsyncedCount scores saved locally on device."
+                            },
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Medium),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        if (isOnline && (unsyncedCount > 0 || backupState != "SUCCESS")) {
+                            Text(
+                                text = "Sync Now / सिंक करें",
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clickable { viewModel.triggerCloudBackup() }
+                                    .testTag("home_sync_anchor")
+                            )
+                        }
+                    }
+
+                    // Display download cache stats
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "📥 Download Cache: ${downloadedList.size} lessons/stories saved for offline play",
+                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.secondary
+                    )
                 }
             }
         }
@@ -516,19 +587,21 @@ fun StudentHomeScreen(
 
         // Lesson Cards List - Clean white/slate grids with large rounded corners
         items(filteredLessons) { lesson ->
+            val isDownloaded = downloadedList.any { it.id == lesson.id }
+            val isPlayable = isOnline || isDownloaded
             Card(
                 colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = if (isPlayable) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                 ),
                 shape = RoundedCornerShape(20.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(
                         1.dp,
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
+                        if (isPlayable) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
                         RoundedCornerShape(20.dp)
                     )
-                    .clickable { onStartLesson(lesson) }
+                    .clickable(enabled = isPlayable) { onStartLesson(lesson) }
                     .testTag("lesson_card_${lesson.id}")
             ) {
                 Row(
@@ -539,32 +612,56 @@ fun StudentHomeScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = lesson.hindiTitle,
-                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = lesson.hindiTitle,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            if (isDownloaded) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        "💾 Offline Ready",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = lesson.title,
                             style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = if (isPlayable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = lesson.description,
                             style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            color = if (isPlayable) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                         )
-                        Text(
-                            text = lesson.hindiDescription,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
+                        if (!isPlayable) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "⚠️ Offline: Requires Download to Practice",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
                     }
 
                     // XP value badge styled exactly like the bento badge
                     Column(
                         horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                         modifier = Modifier.padding(start = 12.dp)
                     ) {
                         Box(
@@ -579,6 +676,165 @@ fun StudentHomeScreen(
                                 text = "${lesson.xpValue} XP",
                                 style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
                                 color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+
+                        // Download status actions
+                        if (isDownloaded) {
+                            Text(
+                                text = "Delete 🗑️",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .clickable { viewModel.removeDownloadedLesson(lesson.id) }
+                                    .testTag("delete_lesson_${lesson.id}")
+                            )
+                        } else {
+                            Text(
+                                text = "Download 📥",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clickable { viewModel.downloadLesson(lesson.id, isStory = false, title = lesson.title) }
+                                    .testTag("download_lesson_${lesson.id}")
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // Playful course stories header
+        item {
+            Text(
+                text = "कहानी पढ़ना शुरू करें / Interactive Story Modules",
+                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Black),
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.padding(top = 16.dp)
+            )
+            Text(
+                text = progress.currentLevel + " level stories based on everyday village life.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+            )
+        }
+
+        // Stories Cards List
+        items(filteredStories) { story ->
+            val isDownloaded = downloadedList.any { it.id == story.id }
+            val isPlayable = isOnline || isDownloaded
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = if (isPlayable) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
+                ),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .border(
+                        1.dp,
+                        if (isPlayable) MaterialTheme.colorScheme.outline.copy(alpha = 0.15f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.08f),
+                        RoundedCornerShape(20.dp)
+                    )
+                    .clickable(enabled = isPlayable) { onStartStory(story) }
+                    .testTag("story_card_${story.id}")
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(18.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = story.hindiTitle,
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                            if (isDownloaded) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(Color(0xFFE8F5E9), RoundedCornerShape(8.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(
+                                        "💾 Offline",
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32)
+                                    )
+                                }
+                            }
+                        }
+                        Text(
+                            text = story.title,
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                            color = if (isPlayable) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = story.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (isPlayable) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                        )
+                        if (!isPlayable) {
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "⚠️ Offline: Requires Download to Play",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                        }
+                    }
+
+                    // XP value and download side col
+                    Column(
+                        horizontalAlignment = Alignment.End,
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.padding(start = 12.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .background(
+                                    MaterialTheme.colorScheme.tertiaryContainer,
+                                    RoundedCornerShape(12.dp)
+                                )
+                                .padding(horizontal = 12.dp, vertical = 6.dp)
+                        ) {
+                            Text(
+                                text = "${story.xpValue} XP",
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
+
+                        // Download control
+                        if (isDownloaded) {
+                            Text(
+                                text = "Delete 🗑️",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error,
+                                modifier = Modifier
+                                    .clickable { viewModel.removeDownloadedLesson(story.id) }
+                                    .testTag("delete_story_${story.id}")
+                            )
+                        } else {
+                            Text(
+                                text = "Download 📥",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier
+                                    .clickable { viewModel.downloadLesson(story.id, isStory = true, title = story.title) }
+                                    .testTag("download_story_${story.id}")
                             )
                         }
                     }
